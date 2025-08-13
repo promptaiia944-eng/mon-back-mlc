@@ -40,6 +40,7 @@ def submit_form(contact_form: ContactForm):
     try:
         # Écrire les données dans la feuille Google Sheets
         sheet_id = os.getenv("GOOGLE_SHEET_ID")
+        to_number = os.getenv("TO_PHONE_NUMBER")
         sheet_range = "Feuille1!A:C"
         values_to_write = [[contact_form.nom, contact_form.contacts, contact_form.email]]
         write_to_sheet(sheet_id, sheet_range, values_to_write)
@@ -62,7 +63,7 @@ def submit_form(contact_form: ContactForm):
 
     Avec MLC, c’est une transformation garantie et un accompagnement sur mesure ❤️
     """
-        send_whatsapp_message(contact_form.contacts, whatsapp_message_body)
+        send_whatsapp_message(to_number, whatsapp_message_body)
 
         return {"message": "Données enregistrées, e-mail et message WhatsApp envoyés avec succès !"}
 

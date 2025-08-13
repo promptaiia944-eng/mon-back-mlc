@@ -20,7 +20,6 @@ def send_whatsapp_message(to_number: str, body: str):
 
     try:
         client = Client(account_sid, auth_token)
-        # ... le reste du code est inchangé
         message = client.messages.create(
             from_=twilio_whatsapp_number,
             body=body,
