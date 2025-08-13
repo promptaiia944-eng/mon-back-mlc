@@ -17,8 +17,9 @@ app = FastAPI()
 
 # Configuration de CORS
 origins = [
-    "http://localhost:5173",  # L'URL par défaut de ton application React
+    #"http://localhost:5173",  # L'URL par défaut de ton application React
     # Tu peux ajouter d'autres URL ici si besoin
+    "https://mlc-project-h17y.vercel.app",
 ]
 
 app.add_middleware(
@@ -49,7 +50,7 @@ def submit_form(contact_form: ContactForm):
 
         # Envoi du message WhatsApp de confirmation
         whatsapp_message_body = f"""
-    Salut {contact_form.nom} ! 👋✨
+        Salut {contact_form.nom} ! 👋✨
 
     Tu veux en savoir plus sur notre programme MLC et découvrir comment il peut transformer ta vie ? 🌟
     Voici les étapes à suivre :
