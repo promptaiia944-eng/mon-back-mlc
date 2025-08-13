@@ -48,14 +48,18 @@ def submit_form(contact_form: ContactForm):
         send_confirmation_email(contact_form.email, contact_form.nom)
 
         # Envoi du message WhatsApp de confirmation
-        whatsapp_message_body = f"""Salut {contact_form.nom} ! :salut_main::scintillements:
-            Tu veux en savoir plus sur notre programme MLC et découvrir comment il peut transformer ta vie ? :étoile2:
+        whatsapp_message_body = f"""Salut {contact_form.nom} ! 👋✨
+            Tu veux en savoir plus sur notre programme MLC et découvrir comment il peut transformer ta vie ? 🌟
             Voici les étapes à suivre :
-            ETAPE 1 : Inscris-toi sur la plateforme officielle MLC ici :index_vers_la_droite: https://mlc.health/fr/fsd865
-            ETAPE 2 : Rejoins le groupe WhatsApp ici :index_vers_la_droite: https://chat.whatsapp.com/CuYWhHMHkin9PjwO4t2JMM?mode=ac_t
-            Avec MLC, c’est une transformation garantie et un accompagnement sur mesure :cœur:
-            WhatsApp.comWhatsApp.com
-            MLC Africa 6"""
+
+            ETAPE 1 : Inscris-toi sur la plateforme officielle MLC ici 👇
+            https://mlc.health/fr/fsd865
+
+            ETAPE 2 : Rejoins le groupe WhatsApp ici 👇
+            https://chat.whatsapp.com/CuYWhHMHkin9PjwO4t2JMM?mode=ac_t
+
+            Avec MLC, c’est une transformation garantie et un accompagnement sur mesure ❤️
+            """
         send_whatsapp_message(contact_form.contacts, whatsapp_message_body)
 
         return {"message": "Données enregistrées, e-mail et message WhatsApp envoyés avec succès !"}
