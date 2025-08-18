@@ -5,9 +5,6 @@ import os
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 def get_google_sheet_service():
-    """
-    Initialise et retourne le service de l'API Google Sheets.
-    """
     creds_file_path = os.getenv('GOOGLE_SHEETS_CREDENTIALS_FILE')
     if not creds_file_path or not os.path.exists(creds_file_path):
         raise FileNotFoundError(f"Fichier de credentials Google Sheets non trouvé à: {creds_file_path}")
@@ -19,9 +16,6 @@ def get_google_sheet_service():
     return build('sheets', 'v4', credentials=creds)
 
 def write_to_sheet(sheet_id: str, range_name: str, values: list[list[str]]):
-    """
-    Écrit des données dans une feuille Google Sheets spécifique.
-    """
     service = get_google_sheet_service()
     body = {
         'values': values
@@ -34,3 +28,18 @@ def write_to_sheet(sheet_id: str, range_name: str, values: list[list[str]]):
         body=body
     ).execute()
     return result
+
+def get_all_sheet_data(sheet_id: str, range_name: str = "Feuille1!A:C"):
+    """
+    Récupère toutes les données de la feuille Google Sheets.
+    """
+    try:
+        service = get_google_sheet_service()
+        result = service.spreadsheets().values().get(
+            spreadsheetId=sheet_id,
+            range=range_name
+        ).execute()
+        values = result.get('values', [])
+        return values
+    except Exception as e:
+        raise Exception(f"Erreur lors de la lecture des données de la feuille : {str(e)}")
