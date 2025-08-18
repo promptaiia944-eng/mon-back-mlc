@@ -22,6 +22,7 @@ from sqlalchemy import Column, Integer, String, DateTime
 from datetime import datetime
 from uuid import UUID, uuid4
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from typing import List, Optional, Generic, TypeVar
 
 
 
@@ -118,6 +119,14 @@ class ProspectInDB(BaseModel):
 
     class Config:
         from_attributes = True
+
+T = TypeVar('T')
+
+class Pagination(BaseModel, Generic[T]):
+    total_count: int
+    skip: int
+    limit: int
+    items: List[T]
 
 @app.post("/login", response_model=Token)
 def login_for_access_token(user_data: UserLogin, db: Session = Depends(get_db)):
@@ -220,10 +229,33 @@ def create_prospect(prospect: ProspectCreate, db: Session = Depends(get_db), cur
     db.refresh(db_prospect)
     return db_prospect
 
-@app.get("/prospects/", response_model=list[ProspectInDB])
-def get_all_prospects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    prospects = db.query(Prospects).all()
-    return prospects
+@app.get("/prospects/", response_model=Pagination[ProspectInDB])
+def get_all_prospects(
+    skip: int = 0,
+    limit: int = 10,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Récupère une liste de prospects avec pagination.
+    """
+    if limit > 100:
+        raise HTTPException(status_code=400, detail="La limite ne peut pas dépasser 100")
+        
+    prospects_query = db.query(Prospects)
+    total_count = prospects_query.count()
+    
+    prospects = prospects_query.offset(skip).limit(limit).all()
+    
+    # Préparer la réponse paginée
+    items = [ProspectInDB.from_orm(p) for p in prospects]
+    
+    return Pagination[ProspectInDB](
+        total_count=total_count,
+        skip=skip,
+        limit=limit,
+        items=items
+    )
 
 @app.put("/prospects/{prospect_id}", response_model=ProspectInDB)
 def update_prospect(
