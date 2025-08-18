@@ -12,13 +12,45 @@ from schemas.contact import ContactForm
 from google_sheets import write_to_sheet, get_all_sheet_data
 from email_sender import send_confirmation_email
 from whatsapp_sender import send_whatsapp_message
-from auth import verify_password, create_access_token, get_current_user, oauth2_scheme
+from auth import verify_password, create_access_token, get_current_user, get_password_hash, oauth2_scheme
 
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base, Session
+from sqlalchemy import Column, Integer, String, DateTime
+from datetime import datetime
 
 
 
 app = FastAPI()
+
+# URL de la base de données
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Création du moteur de base de données
+engine = create_engine(DATABASE_URL)
+
+# Création d'une classe de session
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Création de la classe de base pour les modeles de données
+Base = declarative_base()
+
+# Dépendance pour la base de données
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    password_hashed = Column(String)
 
 # Configuration de CORS
 origins = [
@@ -45,22 +77,55 @@ class UserLogin(BaseModel):
     username: str
     password: str
 
-@app.post("/admin/login", response_model=Token)
-def login_for_access_token(user_data: UserLogin): # On attend un JSON
-    username = os.getenv("DASHBOARD_USERNAME")
-    password_hashed = os.getenv("DASHBOARD_PASSWORD_HASHED")
+class UserCreate(BaseModel):
+    username: str
+    password: str
 
-    # On vérifie les identifiants en utilisant les données du JSON
-    if user_data.username != username or not verify_password(user_data.password, password_hashed):
+
+# Modèle pour la base de données (table "prospects")
+class Prospects(Base):
+    __tablename__ = "prospects"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nom = Column(String, index=True)
+    contacts = Column(String, index=True)
+    email = Column(String, unique=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+# Schémas Pydantic pour la validation des données
+class ProspectBase(BaseModel):
+    nom: str
+    contacts: str
+    email: str
+
+class ProspectCreate(ProspectBase):
+    pass
+
+class ProspectUpdate(ProspectBase):
+    pass
+
+class ProspectInDB(ProspectBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+@app.post("/admin/login", response_model=Token)
+def login_for_access_token(user_data: UserLogin, db: Session = Depends(get_db)):
+    # Recherche l'utilisateur dans la base de données
+    user = db.query(User).filter(User.username == user_data.username).first()
+
+    # Si l'utilisateur n'existe pas ou que le mot de passe est incorrect
+    if not user or not verify_password(user_data.password, user.password_hashed):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Nom d'utilisateur ou mot de passe incorrect",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
     access_token_expires = timedelta(minutes=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")))
     access_token = create_access_token(
-        data={"sub": user_data.username}, expires_delta=access_token_expires
+        data={"sub": user.username}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -124,3 +189,56 @@ def submit_form(contact_form: ContactForm):
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Une erreur est survenue: {str(e)}")
+
+@app.post("/prospects/", response_model=ProspectInDB)
+def create_prospect(prospect: ProspectCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db_prospect = Prospects(
+        nom=prospect.nom,
+        contacts=prospect.contacts,
+        email=prospect.email,
+    )
+    db.add(db_prospect)
+    db.commit()
+    db.refresh(db_prospect)
+    return db_prospect
+
+@app.get("/prospects/", response_model=list[ProspectInDB])
+def get_all_prospects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    prospects = db.query(Prospects).all()
+    return prospects
+
+@app.put("/prospects/{prospect_id}", response_model=ProspectInDB)
+def update_prospect(
+    prospect_id: int,
+    prospect_data: ProspectUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    db_prospect = db.query(Prospects).filter(Prospects.id == prospect_id).first()
+    if not db_prospect:
+        raise HTTPException(status_code=404, detail="Prospect non trouvé")
+    
+    db_prospect.nom = prospect_data.nom
+    db_prospect.contacts = prospect_data.contacts
+    db_prospect.email = prospect_data.email
+    
+    db.commit()
+    db.refresh(db_prospect)
+    return db_prospect
+
+@app.delete("/prospects/{prospect_id}")
+def delete_prospect(
+    prospect_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    db_prospect = db.query(Prospects).filter(Prospects.id == prospect_id).first()
+    if not db_prospect:
+        raise HTTPException(status_code=404, detail="Prospect non trouvé")
+    
+    db.delete(db_prospect)
+    db.commit()
+    return {"message": "Prospect supprimé avec succès"}
+
+# Crée les tables si elles n'existent pas (À SUPPRIMER APRÈS LA PREMIÈRE EXÉCUTION !)
+# Base.metadata.create_all(bind=engine)

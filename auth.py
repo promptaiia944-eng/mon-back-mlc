@@ -7,11 +7,17 @@ from passlib.context import CryptContext
 from typing import Optional
 
 
+
 # Mots de passe hachés
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Schéma OAuth2 pour la récupération du token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/admin/login")
+
+# Fonction pour hacher le mot de passe
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
 
 # Variables d'environnement
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")

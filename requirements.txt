@@ -77,3 +77,5 @@ yarl==1.20.1
 python-jose
 passlib
 bcrypt
+psycopg2-binary
+sqlalchemy
