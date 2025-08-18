@@ -1,3 +1,14 @@
-.env
-venv/
 credentials.json
+
+# Python
+__pycache__/
+*.pyc
+
+# Environnement virtuel
+venv/
+.venv/
+
+# Variables d'environnement
+.env
+
+*.sqlite

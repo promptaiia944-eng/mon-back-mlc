@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import timedelta
 from pydantic import BaseModel
+from typing import Optional
 
 from schemas.contact import ContactForm
 from google_sheets import write_to_sheet, get_all_sheet_data
@@ -19,6 +20,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from sqlalchemy import Column, Integer, String, DateTime
 from datetime import datetime
+from uuid import UUID, uuid4
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 
 
@@ -86,7 +89,7 @@ class UserCreate(BaseModel):
 class Prospects(Base):
     __tablename__ = "prospects"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     nom = Column(String, index=True)
     contacts = Column(String, index=True)
     email = Column(String, unique=True, index=True)
@@ -101,17 +104,22 @@ class ProspectBase(BaseModel):
 class ProspectCreate(ProspectBase):
     pass
 
-class ProspectUpdate(ProspectBase):
-    pass
+class ProspectUpdate(BaseModel):
+    nom: Optional[str] = None
+    contacts: Optional[str] = None
+    email: Optional[str] = None
 
-class ProspectInDB(ProspectBase):
-    id: int
+class ProspectInDB(BaseModel):
+    id: UUID
+    nom: str
+    contacts: str
+    email: str
     created_at: datetime
 
     class Config:
         from_attributes = True
 
-@app.post("/admin/login", response_model=Token)
+@app.post("/login", response_model=Token)
 def login_for_access_token(user_data: UserLogin, db: Session = Depends(get_db)):
     # Recherche l'utilisateur dans la base de données
     user = db.query(User).filter(User.username == user_data.username).first()
@@ -151,13 +159,13 @@ def get_admin_data(current_user: str = Depends(get_current_user)):
 
 
 @app.post("/api/submit-form")
-def submit_form(contact_form: ContactForm):
+def submit_form(contact_form: ContactForm, db: Session = Depends(get_db)):
     """
     Endpoint pour recevoir les données du formulaire, les écrire dans Google Sheets,
-    envoyer un e-mail et un message WhatsApp de confirmation.
+    et les ajouter à la base de données.
     """
     try:
-        # Écrire les données dans la feuille Google Sheets
+        # Étape 1 : Écrire les données dans la feuille Google Sheets
         sheet_id = os.getenv("GOOGLE_SHEET_ID")
         sheet_range = "Feuille1!A:C"
         values_to_write = [[contact_form.nom, contact_form.contacts, contact_form.email]]
@@ -183,7 +191,17 @@ def submit_form(contact_form: ContactForm):
     """
         send_whatsapp_message(contact_form.contacts, whatsapp_message_body)
 
-        return {"message": "Données enregistrées, e-mail et message WhatsApp envoyés avec succès !"}
+        # Étape 2 : Ajouter les données à la base de données PostgreSQL
+        db_prospect = Prospects(
+            nom=contact_form.nom,
+            contacts=contact_form.contacts,
+            email=contact_form.email,
+        )
+        db.add(db_prospect)
+        db.commit()
+        db.refresh(db_prospect)
+
+        return {"message": "Données enregistrées dans Google Sheets et la base de données, e-mail et message WhatsApp envoyés avec succès !"}
 
     except FileNotFoundError as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -209,7 +227,7 @@ def get_all_prospects(db: Session = Depends(get_db), current_user: User = Depend
 
 @app.put("/prospects/{prospect_id}", response_model=ProspectInDB)
 def update_prospect(
-    prospect_id: int,
+    prospect_id: UUID,
     prospect_data: ProspectUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -217,28 +235,83 @@ def update_prospect(
     db_prospect = db.query(Prospects).filter(Prospects.id == prospect_id).first()
     if not db_prospect:
         raise HTTPException(status_code=404, detail="Prospect non trouvé")
-    
-    db_prospect.nom = prospect_data.nom
-    db_prospect.contacts = prospect_data.contacts
-    db_prospect.email = prospect_data.email
-    
+
+    # Mettre à jour les champs s'ils sont fournis
+    if prospect_data.nom is not None:
+        db_prospect.nom = prospect_data.nom
+    if prospect_data.contacts is not None:
+        db_prospect.contacts = prospect_data.contacts
+    if prospect_data.email is not None:
+        db_prospect.email = prospect_data.email
+
     db.commit()
     db.refresh(db_prospect)
     return db_prospect
 
 @app.delete("/prospects/{prospect_id}")
 def delete_prospect(
-    prospect_id: int,
+    prospect_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     db_prospect = db.query(Prospects).filter(Prospects.id == prospect_id).first()
     if not db_prospect:
         raise HTTPException(status_code=404, detail="Prospect non trouvé")
-    
+
     db.delete(db_prospect)
     db.commit()
     return {"message": "Prospect supprimé avec succès"}
+
+@app.post("/prospects/sync-from-sheets")
+def sync_prospects_from_sheets(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Endpoint protégé pour lire tous les prospects de la feuille Google Sheets
+    et les ajouter à la base de données sans erreur en cas de doublon.
+    """
+    try:
+        sheet_id = os.getenv("GOOGLE_SHEET_ID")
+        if not sheet_id:
+            raise ValueError("GOOGLE_SHEET_ID non configuré.")
+
+        sheet_data = get_all_sheet_data(sheet_id)
+        
+        prospects_added_count = 0
+        prospects_skipped_count = 0
+
+        # On saute la première ligne qui contient les en-têtes
+        for row in sheet_data[1:]:
+            if not row or len(row) < 3:
+                continue
+
+            nom = row[0]
+            contacts = row[1]
+            email = row[2]
+            
+            # Vérifier si un prospect avec cet email existe déjà
+            existing_prospect = db.query(Prospects).filter(Prospects.email == email).first()
+            if existing_prospect:
+                print(f"Prospect avec l'email {email} déjà existant, ignoré.")
+                prospects_skipped_count += 1
+                continue
+
+            # Créer et ajouter le nouveau prospect
+            db_prospect = Prospects(nom=nom, contacts=contacts, email=email)
+            db.add(db_prospect)
+            db.commit() # On commit à chaque ajout
+            prospects_added_count += 1
+
+        return {
+            "message": f"{prospects_added_count} prospects ajoutés, {prospects_skipped_count} prospects déjà existants ignorés.",
+            "prospects_ajoutes": prospects_added_count,
+            "prospects_ignores": prospects_skipped_count
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Une erreur est survenue lors de la synchronisation : {str(e)}")
 
 # Crée les tables si elles n'existent pas (À SUPPRIMER APRÈS LA PREMIÈRE EXÉCUTION !)
 # Base.metadata.create_all(bind=engine)
