@@ -217,17 +217,43 @@ def submit_form(contact_form: ContactForm, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Une erreur est survenue: {str(e)}")
 
-@app.post("/prospects/", response_model=ProspectInDB)
-def create_prospect(prospect: ProspectCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    db_prospect = Prospects(
-        nom=prospect.nom,
-        contacts=prospect.contacts,
-        email=prospect.email,
-    )
-    db.add(db_prospect)
-    db.commit()
-    db.refresh(db_prospect)
-    return db_prospect
+@app.post("/prospects/", response_model=ProspectInDB, status_code=status.HTTP_201_CREATED)
+def create_prospect(
+    prospect: ProspectCreate, 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Crée un nouveau prospect et l'ajoute à la base de données ainsi qu'à Google Sheets.
+    """
+    try:
+        # Étape 1 : Ajouter le nouveau prospect à la base de données
+        db_prospect = Prospects(
+            nom=prospect.nom,
+            contacts=prospect.contacts,
+            email=prospect.email,
+        )
+        db.add(db_prospect)
+        db.commit()
+        db.refresh(db_prospect)
+
+        # Étape 2 : Écrire les données dans la feuille Google Sheets
+        # Cette partie est similaire à l'endpoint /api/submit-form
+        sheet_id = os.getenv("GOOGLE_SHEET_ID")
+        sheet_range = "Feuille1!A:C"  # Assurez-vous que le nom de la feuille est correct
+
+        # Préparer les valeurs dans le format requis par la fonction write_to_sheet
+        values_to_write = [[prospect.nom, prospect.contacts, prospect.email]]
+        
+        # Appeler la fonction pour écrire dans le sheets
+        write_to_sheet(sheet_id, sheet_range, values_to_write)
+        
+        return db_prospect
+
+    except Exception as e:
+        # En cas d'erreur, annuler la transaction de la base de données
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Une erreur est survenue lors de la création du prospect: {str(e)}")
 
 @app.get("/prospects/", response_model=Pagination[ProspectInDB])
 def get_all_prospects(
