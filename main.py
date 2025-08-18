@@ -124,7 +124,7 @@ T = TypeVar('T')
 
 class Pagination(BaseModel, Generic[T]):
     total_count: int
-    skip: int
+    page: int
     limit: int
     items: List[T]
 
@@ -231,17 +231,23 @@ def create_prospect(prospect: ProspectCreate, db: Session = Depends(get_db), cur
 
 @app.get("/prospects/", response_model=Pagination[ProspectInDB])
 def get_all_prospects(
-    skip: int = 0,
+    page: int = 1,
     limit: int = 10,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Récupère une liste de prospects avec pagination.
+    Récupère une liste de prospects avec pagination par numéro de page.
     """
     if limit > 100:
-        raise HTTPException(status_code=400, detail="La limite ne peut pas dépasser 100")
-        
+        raise HTTPException(status_code=400, detail="La limite ne peut pas dépasser 100.")
+
+    if page < 1:
+        raise HTTPException(status_code=400, detail="Le numéro de page doit être supérieur ou égal à 1.")
+    
+    # Calculer le 'skip' à partir du numéro de page
+    skip = (page - 1) * limit
+
     prospects_query = db.query(Prospects)
     total_count = prospects_query.count()
     
@@ -252,7 +258,7 @@ def get_all_prospects(
     
     return Pagination[ProspectInDB](
         total_count=total_count,
-        skip=skip,
+        page=page,
         limit=limit,
         items=items
     )
