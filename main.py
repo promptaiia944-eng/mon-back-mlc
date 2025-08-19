@@ -60,7 +60,8 @@ class User(Base):
 origins = [
     "http://localhost:5173",  # L'URL par défaut de ton application React
     # Tu peux ajouter d'autres URL ici si besoin
-    #"https://mlc-project-h17y.vercel.app",
+    "https://mlc-project-h17y.vercel.app",
+    "https://mlc-project.vercel.app",
     "http://127.0.0.1:8000"
 ]
 
@@ -288,6 +289,23 @@ def get_all_prospects(
         limit=limit,
         items=items
     )
+
+def sync_prospect_to_sheets(prospect_data: dict):
+    """
+    Synchronise les données d'un prospect avec la feuille Google Sheets.
+    """
+    try:
+        sheet_id = os.getenv("GOOGLE_SHEET_ID")
+        sheet_range = "Feuille1!A:C"
+        
+        # On prépare la ligne à écrire, en s'assurant que l'ordre des colonnes est correct
+        values_to_write = [[prospect_data['nom'], prospect_data['contacts'], prospect_data['email']]]
+        
+        write_to_sheet(sheet_id, sheet_range, values_to_write)
+        print("Données synchronisées avec Google Sheets.")
+    except Exception as e:
+        print(f"Erreur lors de la synchronisation avec Google Sheets : {e}")
+
 
 @app.put("/prospects/{prospect_id}", response_model=ProspectInDB)
 def update_prospect(
