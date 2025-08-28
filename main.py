@@ -221,7 +221,7 @@ def submit_form(contact_form: ContactForm, db: Session = Depends(get_db)):
     """
         send_whatsapp_message(contact_form.contacts, whatsapp_message_body)
 
-        return {"message": "Données enregistrées dans Google Sheets et la base de données, e-mail et message WhatsApp envoyés avec succès !"}
+        return {"status_code":status.HTTP_201_CREATED, "message": "Données enregistrées dans Google Sheets et la base de données, e-mail et message WhatsApp envoyés avec succès !"}
 
     except Exception as e:
         db.rollback()
