@@ -97,7 +97,7 @@ class Prospects(Base):
     id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     nom = Column(String, index=True)
     contacts = Column(String, index=True)
-    email = Column(String, unique=True, index=True)
+    email = Column(String, unique=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 # Schémas Pydantic pour la validation des données
