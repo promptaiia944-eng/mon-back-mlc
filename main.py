@@ -184,10 +184,7 @@ def submit_form(contact_form: ContactForm, db: Session = Depends(get_db)):
         ).first()
         
         if existing_prospect:
-            raise HTTPException(
-                status_code=409,
-                detail="L'email est déjà utilisé. Veuillez en utiliser un autre."
-            )
+            return {"status_code":409,"message": "L'email est déjà utilisé. Veuillez en utiliser un autre."}
 
         # Étape 2 : Ajouter les données à la base de données PostgreSQL
         db_prospect = Prospects(
