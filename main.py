@@ -64,7 +64,8 @@ origins = [
     "https://mlc-project.vercel.app",
     "http://127.0.0.1:8000",
     "https://mlc.ci/",
-    "https://www.mlc.ci"
+    "https://www.mlc.ci",
+    "https://mlc.ci"
 ]
 
 app.add_middleware(
