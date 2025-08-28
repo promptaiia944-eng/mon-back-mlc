@@ -97,7 +97,7 @@ class Prospects(Base):
     id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     nom = Column(String, index=True)
     contacts = Column(String, index=True)
-    email = Column(String, unique=False, index=True)
+    email = Column(String, unique=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 # Schémas Pydantic pour la validation des données
@@ -174,20 +174,40 @@ def get_admin_data(current_user: str = Depends(get_current_user)):
 @app.post("/api/submit-form")
 def submit_form(contact_form: ContactForm, db: Session = Depends(get_db)):
     """
-    Endpoint pour recevoir les données du formulaire, les écrire dans Google Sheets,
-    et les ajouter à la base de données.
+    Endpoint pour recevoir les données du formulaire, vérifier l'existence de l'email,
+    les ajouter à la base de données, puis les synchroniser avec Google Sheets et envoyer des notifications.
     """
     try:
-        # Étape 1 : Écrire les données dans la feuille Google Sheets
+        # Étape 1 : Vérifier si l'email existe déjà dans la base de données
+        existing_prospect = db.query(Prospects).filter(
+            Prospects.email == contact_form.email
+        ).first()
+        
+        if existing_prospect:
+            raise HTTPException(
+                status_code=409,
+                detail="L'email est déjà utilisé. Veuillez en utiliser un autre."
+            )
+
+        # Étape 2 : Ajouter les données à la base de données PostgreSQL
+        db_prospect = Prospects(
+            nom=contact_form.nom,
+            contacts=contact_form.contacts,
+            email=contact_form.email,
+        )
+        db.add(db_prospect)
+        db.commit()
+        db.refresh(db_prospect)
+
+        # Étape 3 : Écrire les données dans la feuille Google Sheets
+        # Cette étape est exécutée seulement si la DB a été mise à jour avec succès
         sheet_id = os.getenv("GOOGLE_SHEET_ID")
         sheet_range = "Feuille1!A:C"
         values_to_write = [[contact_form.nom, contact_form.contacts, contact_form.email]]
         write_to_sheet(sheet_id, sheet_range, values_to_write)
         
-        # Envoi de l'e-mail de confirmation
+        # Étape 4 : Envoyer l'e-mail de confirmation et le message WhatsApp
         send_confirmation_email(contact_form.email, contact_form.nom)
-
-        # Envoi du message WhatsApp de confirmation
         whatsapp_message_body = f"""
         Salut {contact_form.nom} ! 👋✨
 
@@ -204,21 +224,10 @@ def submit_form(contact_form: ContactForm, db: Session = Depends(get_db)):
     """
         send_whatsapp_message(contact_form.contacts, whatsapp_message_body)
 
-        # Étape 2 : Ajouter les données à la base de données PostgreSQL
-        db_prospect = Prospects(
-            nom=contact_form.nom,
-            contacts=contact_form.contacts,
-            email=contact_form.email,
-        )
-        db.add(db_prospect)
-        db.commit()
-        db.refresh(db_prospect)
-
         return {"message": "Données enregistrées dans Google Sheets et la base de données, e-mail et message WhatsApp envoyés avec succès !"}
 
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=f"Une erreur est survenue: {str(e)}")
 
 @app.post("/prospects/", response_model=ProspectInDB, status_code=status.HTTP_201_CREATED)
@@ -231,7 +240,18 @@ def create_prospect(
     Crée un nouveau prospect et l'ajoute à la base de données ainsi qu'à Google Sheets.
     """
     try:
-        # Étape 1 : Ajouter le nouveau prospect à la base de données
+        # Étape 1 : Vérifier si l'email existe déjà dans la base de données
+        existing_prospect = db.query(Prospects).filter(
+            Prospects.email == prospect.email
+        ).first()
+
+        if existing_prospect:
+            raise HTTPException(
+                status_code=409,
+                detail="L'email est déjà utilisé. Veuillez en utiliser un autre."
+            )
+
+        # Étape 2 : Ajouter le nouveau prospect à la base de données
         db_prospect = Prospects(
             nom=prospect.nom,
             contacts=prospect.contacts,
@@ -241,21 +261,15 @@ def create_prospect(
         db.commit()
         db.refresh(db_prospect)
 
-        # Étape 2 : Écrire les données dans la feuille Google Sheets
-        # Cette partie est similaire à l'endpoint /api/submit-form
+        # Étape 3 : Écrire les données dans la feuille Google Sheets
         sheet_id = os.getenv("GOOGLE_SHEET_ID")
-        sheet_range = "Feuille1!A:C"  # Assurez-vous que le nom de la feuille est correct
-
-        # Préparer les valeurs dans le format requis par la fonction write_to_sheet
+        sheet_range = "Feuille1!A:C"
         values_to_write = [[prospect.nom, prospect.contacts, prospect.email]]
-        
-        # Appeler la fonction pour écrire dans le sheets
         write_to_sheet(sheet_id, sheet_range, values_to_write)
         
         return db_prospect
 
     except Exception as e:
-        # En cas d'erreur, annuler la transaction de la base de données
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Une erreur est survenue lors de la création du prospect: {str(e)}")
 
