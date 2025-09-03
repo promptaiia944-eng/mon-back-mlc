@@ -103,7 +103,7 @@ HTML_EMAIL_TEMPLATE = Template(r"""<!DOCTYPE html>
         <tr>
           <td style="background-color:#f8fafc;padding:18px 24px 24px 24px;text-align:center;border-top:1px solid #e5e7eb;color:#6b7280;font-size:0.95rem;">
             <div style="font-weight:700;color:#374151;margin-bottom:6px;">Votre parcours vers un mieux-être optimal commence ici !</div>
-            <div style="font-size:0.85rem;color:#9ca3af;">MLC Health • noeliagui.mlc@gmail.com</div>
+            <div style="font-size:0.85rem;color:#9ca3af;">MLC Health</div>
           </td>
         </tr>
       </table>
