@@ -23,6 +23,8 @@ from datetime import datetime
 from uuid import UUID, uuid4
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from typing import List, Optional, Generic, TypeVar
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 
 
 
@@ -269,6 +271,39 @@ def create_prospect(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Une erreur est survenue lors de la création du prospect: {str(e)}")
+
+
+# 🔹 Google Sheets config
+SPREADSHEET_ID_2 = os.getenv("GOOGLE_SHEET_ID_2")
+RANGE_NAME = "Linkedin!A:D"
+
+# Charger les credentials (clé service account JSON)
+creds = service_account.Credentials.from_service_account_file(
+    "credentials_2.json",
+    scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"],
+)
+
+service = build("sheets", "v4", credentials=creds)
+sheet = service.spreadsheets()
+
+@app.get("/prospections")
+def get_data_prospection_from_sheets():
+    """
+    Récupère toutes les données de la feuille Google Sheets.
+    """
+    try:
+        result = sheet.values().get(
+            spreadsheetId=SPREADSHEET_ID_2,
+            range=RANGE_NAME
+        ).execute()
+        values = result.get("values", [])
+        headers = ["Nom_Profil", "Titre", "Lien_Profil", "Description_Profils"]  # adapte selon tes colonnes
+        formatted_data = [dict(zip(headers, row)) for row in values]
+
+        return {"data": formatted_data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Une erreur est survenue: {str(e)}")
+
 
 @app.get("/prospects/", response_model=Pagination[ProspectInDB])
 def get_all_prospects(
