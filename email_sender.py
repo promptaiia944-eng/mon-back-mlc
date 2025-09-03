@@ -95,7 +95,7 @@ HTML_EMAIL_TEMPLATE = Template(r"""<!DOCTYPE html>
             <div style="background:#f0f9ff;border-left:4px solid #2563eb;padding:14px 18px;margin-bottom:22px;font-size:1rem;color:#374151;line-height:1.6;">
               <strong>Voici les étapes à suivre :</strong><br>
               <strong>ÉTAPE 1 :</strong> Inscrivez-vous sur la plateforme officielle MLC en cliquant 👉 <a href="https://mlc.health/fr/fsd865" target="_blank" style="color:#2563eb;font-weight:600;">ici</a><br>
-              <strong>ÉTAPE 2 :</strong> Rejoignez le groupe WhatsApp en cliquant 👉 <a href="https://chat.whatsapp.com/CuYWhHMHkin9PjwO4t2JMM?mode=ac_t" target="_blank" style="color:#2563eb;font-weight:600;">ici</a>
+              <strong>ÉTAPE 2 :</strong> Rejoignez le groupe WhatsApp en cliquant 👉 <a href="https://chat.whatsapp.com/CuYWhHMHkin9PjwO4t2JMM?mode=ac_t" target="_blank" style="color:#2563eb;font-weight:600;">ici</a><br>
               <strong>ÉTAPE 3 :</strong> Rejoignez le groupe Telegram en cliquant 👉 <a href="https://t.me/mlc_africa_discu" target="_blank" style="color:#2563eb;font-weight:600;">ici</a>
             </div>
           </td>
